@@ -12,28 +12,32 @@
  * @link          https://www.passbolt.com Passbolt(tm)
  */
 
-class GpgAuth {
+class GpgAuth
+{
 
     private $serverUrl;
 
     private $privateKey = [
         'keydata' => '',
-        'info' => [],
+        'info'    => [],
+        'passphrase' => null,
     ];
 
     private $serverKey = [
         'keydata' => '',
-        'info' => []
+        'info'    => []
     ];
 
     private $gpg;
 
 
-    public function __construct($serverUrl, $privateKeyPath)
+    public function __construct($serverUrl, $privateKeyPath, $privateKeyPassphrase = null)
     {
         $this->privateKey['keydata'] = file_get_contents($privateKeyPath);
-        $this->serverUrl = $serverUrl;
-        $this->gpg = new \gnupg();
+        $this->privateKey['passphrase'] = $privateKeyPassphrase;
+        $this->serverUrl             = $serverUrl;
+        $this->gpg                   = new \gnupg();
+        $this->gpg->seterrormode(\gnupg::ERROR_EXCEPTION);
     }
 
     public function generateToken()
@@ -43,53 +47,63 @@ class GpgAuth {
 
     function uuid()
     {
-        $data = random_bytes(16);
+        $data    = random_bytes(16);
         $data[6] = chr(ord($data[6]) & 0x0f | 0x40);
         $data[8] = chr(ord($data[8]) & 0x3f | 0x80);
+
         return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($data), 4));
     }
 
-    private function _curlPost($url, $postParams) {
+    private function _curlPost($url, $postParams)
+    {
         $c = curl_init();
-        curl_setopt($c, CURLOPT_URL,$this->serverUrl . '/auth/login.json');
+        curl_setopt($c, CURLOPT_URL, $url);
         curl_setopt($c, CURLOPT_POST, 1);
-        curl_setopt($c, CURLOPT_POSTFIELDS,  http_build_query($postParams));
+        curl_setopt($c, CURLOPT_POSTFIELDS, http_build_query($postParams));
         curl_setopt($c, CURLOPT_HEADER, 1);
         curl_setopt($c, CURLOPT_RETURNTRANSFER, true);
-        $response = curl_exec($c);
+        $response   = curl_exec($c);
         $headerSize = curl_getinfo($c, CURLINFO_HEADER_SIZE);
-        $header = substr($response, 0, $headerSize);
-        curl_close ($c);
+        $header     = substr($response, 0, $headerSize);
+        curl_close($c);
 
         return $header;
     }
 
-    public function initKeyring() {
-        $this->privateKey['info'] = $this->gpg -> import($this->privateKey['keydata']);
+    public function initKeyring()
+    {
+        $this->privateKey['info'] = $this->gpg->import($this->privateKey['keydata']);
     }
 
-    public function getServerKey() {
+    public function getServerKey()
+    {
         $c = curl_init();
         curl_setopt($c, CURLOPT_URL, $this->serverUrl . '/auth/verify.json');
         curl_setopt($c, CURLOPT_RETURNTRANSFER, true);
-
         $response = curl_exec($c);
         curl_close($c);
 
-        $responseJson = json_decode($response, true);
+        $responseJson    = json_decode($response, true);
         $this->serverKey = $responseJson['body'];
 
-        $this->serverKey['info'] = $this->gpg -> import($this->serverKey['keydata']);
+        $this->serverKey['info'] = $this->gpg->import($this->serverKey['keydata']);
 
         return $this->serverKey;
     }
 
-    private function _getHeader($header, $name) {
-        $headerLines = explode("\n",$header);
-        foreach($headerLines as $headerLine) {
-            if (strpos($headerLine, $name) !== false) {
-                return trim(explode(":",$headerLine)[1]);
+    private function _getHeader($header, $name)
+    {
+        $headerLines = explode("\n", $header);
+        $res         = [];
+
+        foreach ($headerLines as $headerLine) {
+            if (strpos(strtolower($headerLine), strtolower($name) . ':') !== false) {
+                $res = array_merge($res, explode(';', trim(explode(":", $headerLine)[1])));
             }
+        }
+
+        if ($res) {
+            return implode(';', $res);
         }
 
         return false;
@@ -105,14 +119,14 @@ class GpgAuth {
         $post = [
             'data' => [
                 'gpg_auth' => [
-                    'keyid' => $this->privateKey['info']['fingerprint'],
+                    'keyid'               => $this->privateKey['info']['fingerprint'],
                     'server_verify_token' => $encryptedToken,
                 ],
             ],
         ];
 
 
-        $header = $this->_curlPost($this->serverUrl . '/auth/verify.json', $post);
+        $header         = $this->_curlPost($this->serverUrl . '/auth/verify.json', $post);
         $retrievedToken = $this->_getHeader($header, 'X-GPGAuth-Verify-Response');
 
         if ($retrievedToken !== $token) {
@@ -132,11 +146,13 @@ class GpgAuth {
             ],
         ];
 
-        $header = $this->_curlPost($this->serverUrl . '/auth/login.json', $post);
+        $header         = $this->_curlPost($this->serverUrl . '/auth/login.json', $post);
         $encryptedToken = $this->_getHeader($header, 'X-GPGAuth-User-Auth-Token');
         $encryptedToken = (stripslashes(urldecode($encryptedToken)));
-        $this->gpg->adddecryptkey($this->privateKey['info']['fingerprint'], null);
+
+        $this->gpg->adddecryptkey($this->privateKey['info']['fingerprint'], $this->privateKey['passphrase']);
         $verify = $this->gpg->decryptverify($encryptedToken, $decryptedToken);
+
         if ($verify[0]['fingerprint'] !== $this->serverKey['info']['fingerprint']) {
             throw new Exception('Stage 1A: Signature mismatch');
         }
@@ -149,7 +165,7 @@ class GpgAuth {
         $post = [
             'data' => [
                 'gpg_auth' => [
-                    'keyid' => $this->privateKey['info']['fingerprint'],
+                    'keyid'             => $this->privateKey['info']['fingerprint'],
                     'user_token_result' => $token,
                 ],
             ],
@@ -157,21 +173,22 @@ class GpgAuth {
 
         $header = $this->_curlPost($this->serverUrl . '/auth/login.json', $post);
 
-        $status = $this->_getHeader($header, 'X-GPGAuth-Progress');
+        $status        = $this->_getHeader($header, 'X-GPGAuth-Progress');
         $authenticated = $this->_getHeader($header, 'X-GPGAuth-Authenticated');
 
         $authenticated = ($status === 'complete' && $authenticated === 'true');
-        if (!$authenticated) {
+        if ( ! $authenticated) {
             throw new Exception('Stage 1B: Authentication failure');
         }
 
         return $this->_getHeader($header, 'Set-Cookie');
     }
 
-    public function login() {
+    public function login()
+    {
         $this->initKeyring();
         $this->stage0();
-        $token = $this->stage1A();
+        $token  = $this->stage1A();
         $cookie = $this->stage1B($token);
 
         return $cookie;

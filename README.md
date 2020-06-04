@@ -17,3 +17,24 @@ Command line:
 ```bash
 php ./get_resources.php
 ```
+
+# Limitations:
+Depending on your GPG configuration, the private key passphrase provided in the configuration might not be taken into account at runtime.
+If that's the case, you'll need to preset it using gpg, or enter the passphrase manually when prompted.
+
+To preset it in GPG:
+1) get the keygrip
+```bash
+gpg --list-keys --with-keygrip
+```
+
+2) Preset it
+(in Debian)
+```bash
+/usr/lib/gnupg/gpg-preset-passphrase --preset --passphrase <passphrase> <keygrip>
+```
+
+You might need to restart the gpg-agent in order for it to work:
+```bash
+gpg-agent --allow-preset-passphrase
+```
