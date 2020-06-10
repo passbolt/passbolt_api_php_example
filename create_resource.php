@@ -32,6 +32,7 @@ $gpgAuth = new GpgAuth($config['server_url'], $config['private_key_path'], $conf
 // Login in passbolt. This step will return a cookie that can be used in other curl calls.
 $cookie = $gpgAuth->login();
 
+// In the example we use an already encrypted secret
 $postParams = [
     'name' => 'My password',
     'secrets' => [[
@@ -71,7 +72,7 @@ XULWuYQ9T7GLpupX+TLPI/jwQh+y0ezi2EkhdS72WF67vHDUWA==
     ]]
 ];
 
-// Simple example of returning the list of resources.
+// Simple example of creating a resource.
 $ch = curl_init($config['server_url'] . '/resources.json?api-version=v2');
 curl_setopt($ch, CURLOPT_POST, 1);
 curl_setopt($ch, CURLOPT_HEADER, 1);
