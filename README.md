@@ -5,6 +5,7 @@ IMPORTANT: The source code provided is not to be used in production as it is. It
 
 # Examples included:
 - get_resources.php : log in, retrieve passwords and display the request result.
+- create_resource.php : log in and post an already encrypted secret
 
 # Requirements:
 - A Passbolt server (CE, Pro or Cloud)
