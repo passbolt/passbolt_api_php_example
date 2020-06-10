@@ -30,6 +30,10 @@ class GpgAuth
 
     private $gpg;
 
+    public $sessionId = null;
+
+    public $csrfToken = null;
+
 
     public function __construct($serverUrl, $privateKeyPath, $privateKeyPassphrase = null)
     {
@@ -38,6 +42,8 @@ class GpgAuth
         $this->serverUrl             = $serverUrl;
         $this->gpg                   = new \gnupg();
         $this->gpg->seterrormode(\gnupg::ERROR_EXCEPTION);
+        $this->sessionId            = null;
+        $this->csrfToken            = null;
     }
 
     public function generateToken()
@@ -181,7 +187,39 @@ class GpgAuth
             throw new Exception('Stage 1B: Authentication failure');
         }
 
-        return $this->_getHeader($header, 'Set-Cookie');
+        $cookieHeader = $this->_getHeader($header, 'Set-Cookie');
+        preg_match_all('/CAKEPHP=([^;]*);/mi', $cookieHeader, $matches);
+        $this->sessionId = $matches[1][0];
+    }
+
+    public function getCsrfToken()
+    {
+        if (!$this->csrfToken) {
+            $c = curl_init();
+            curl_setopt($c, CURLOPT_URL, $this->serverUrl);
+            curl_setopt($c, CURLOPT_HEADER, 1);
+            curl_setopt($c, CURLOPT_RETURNTRANSFER, true);
+            $response = curl_exec($c);
+            $headerSize = curl_getinfo($c, CURLINFO_HEADER_SIZE);
+            $header     = substr($response, 0, $headerSize);
+            curl_close($c);
+
+            $cookieHeader = $this->_getHeader($header, 'Set-Cookie');
+            preg_match_all('/csrfToken=([^;]*);/mi', $cookieHeader, $matches);
+            $this->csrfToken = $matches[1][0];
+        }
+
+        return $this->csrfToken;
+    }
+
+    public function getCookie(bool $addCsrfToken = false)
+    {
+        $cookie = "CAKEPHP={$this->sessionId}; path=/; HttpOnly;";
+        if ($addCsrfToken) {
+            $cookie .= " csrfToken={$this->getCsrfToken()}";
+        }
+
+        return $cookie;
     }
 
     public function login()
@@ -189,8 +227,6 @@ class GpgAuth
         $this->initKeyring();
         $this->stage0();
         $token  = $this->stage1A();
-        $cookie = $this->stage1B($token);
-
-        return $cookie;
+        $this->stage1B($token);
     }
 }

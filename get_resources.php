@@ -30,12 +30,12 @@ $config = require(__DIR__ . '/config/config.php');
 $gpgAuth = new GpgAuth($config['server_url'], $config['private_key_path'], $config['private_key_passphrase']);
 
 // Login in passbolt. This step will return a cookie that can be used in other curl calls.
-$cookie = $gpgAuth->login();
+$gpgAuth->login();
 
 // Simple example of returning the list of resources.
 $ch = curl_init($config['server_url'] . '/resources.json');
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-curl_setopt($ch, CURLOPT_COOKIE, $cookie);
+curl_setopt($ch, CURLOPT_COOKIE, $gpgAuth->getCookie());
 $response = curl_exec($ch);
 curl_close($ch);
 
