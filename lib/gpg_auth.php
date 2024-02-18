@@ -188,7 +188,7 @@ class GpgAuth
         }
 
         $cookieHeader = $this->_getHeader($header, 'Set-Cookie');
-        preg_match_all('/CAKEPHP=([^;]*);/mi', $cookieHeader, $matches);
+        preg_match_all('/passbolt_session=([^;]*);/mi', $cookieHeader, $matches);
         $this->sessionId = $matches[1][0];
     }
 
@@ -214,7 +214,7 @@ class GpgAuth
 
     public function getCookie(bool $addCsrfToken = false)
     {
-        $cookie = "CAKEPHP={$this->sessionId}; path=/; HttpOnly;";
+        $cookie = "passbolt_session={$this->sessionId}; path=/; HttpOnly;";
         if ($addCsrfToken) {
             $cookie .= " csrfToken={$this->getCsrfToken()}";
         }
