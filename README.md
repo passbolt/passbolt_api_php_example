@@ -1,3 +1,7 @@
+```
+NOTE: THIS REPOSITORY IS ARCHIVED. SEE. https://www.passbolt.com/docs
+```
+
 # PASSBOLT API PHP EXAMPLE
 This repository contains an example of [Passbolt api](https://help.passbolt.com/api) implementation in PHP. 
 
